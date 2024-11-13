@@ -30,11 +30,20 @@ function clearCanvas() {
     drawLine();
 }
 
-function initBuffer() {
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-    return buffer;
+function createRectangleVertices(x1, y1, x2, y2, width) {
+    // Calculate perpendicular vector to (x2 - x1, y2 - y1)
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const ux = dy / length * width / canvas.width;
+    const uy = -dx / length * width / canvas.height;
+
+    return [
+        x1 - ux, y1 - uy,
+        x1 + ux, y1 + uy,
+        x2 + ux, y2 + uy,
+        x2 - ux, y2 - uy,
+    ];
 }
 
 function drawLine() {
@@ -45,7 +54,6 @@ function drawLine() {
         attribute vec2 coordinates;
         void main(void) {
             gl_Position = vec4(coordinates, 0.0, 1.0);
-            gl_PointSize = 10.0;
         }`;
     const fragmentShaderSource = `
         precision mediump float;
@@ -67,14 +75,27 @@ function drawLine() {
     gl.linkProgram(shaderProgram);
     gl.useProgram(shaderProgram);
 
-    const buffer = initBuffer();
+    let allVertices = [];
+    for (let i = 0; i < vertices.length - 2; i += 2) {
+        const rectVertices = createRectangleVertices(
+            vertices[i], vertices[i + 1],
+            vertices[i + 2], vertices[i + 3],
+            lineWidth
+        );
+        allVertices.push(...rectVertices);
+    }
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(allVertices), gl.STATIC_DRAW);
 
     const coord = gl.getAttribLocation(shaderProgram, "coordinates");
     gl.vertexAttribPointer(coord, 2, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(coord);
 
-    gl.lineWidth(lineWidth);
-    gl.drawArrays(gl.LINE_STRIP, 0, vertices.length / 2);
+    for (let i = 0; i < allVertices.length / 8; i++) {
+        gl.drawArrays(gl.TRIANGLE_FAN, i * 4, 4);
+    }
 }
 
 canvas.addEventListener("click", (event) => {
